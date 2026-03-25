@@ -1,0 +1,13 @@
+ {
+  "name": "radar-tracker",
+  "version": "1.0.0",
+  "description": "Live ADS-B radar dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.4.0"
+  }
+}
