@@ -1,0 +1,632 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>REAL RADAR - Live Airborne Object Tracker | ADS-B based</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none; /* avoid accidental selection on radar */
+        }
+
+        body {
+            background: #0a0f1e;
+            font-family: 'Segoe UI', 'Roboto', 'Orbitron', monospace;
+            margin: 0;
+            padding: 20px;
+            color: #ccd6f6;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 1.7rem;
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #2aff9e, #00c3ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+
+        .sub {
+            color: #8e9aaf;
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+            border-left: 3px solid #2aff9e;
+            padding-left: 12px;
+        }
+
+        .controls-panel {
+            background: #11161fcc;
+            backdrop-filter: blur(8px);
+            border-radius: 24px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+            border: 1px solid #2a3a5a;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .input-group label {
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #8aa2d4;
+        }
+
+        input, button {
+            background: #0b1018;
+            border: 1px solid #2c3f5f;
+            padding: 8px 14px;
+            border-radius: 40px;
+            color: white;
+            font-family: monospace;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #2aff9e;
+            box-shadow: 0 0 8px #2aff9e66;
+        }
+
+        button {
+            background: #1e2a3a;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button.primary {
+            background: #0f7b3e;
+            border-color: #2aff9e;
+            box-shadow: 0 0 5px #2aff9e66;
+        }
+
+        button.primary:hover {
+            background: #19a854;
+            transform: scale(0.97);
+        }
+
+        .radar-container {
+            background: #03060c;
+            border-radius: 32px;
+            padding: 20px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+            border: 1px solid #1e3a5f;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: radial-gradient(circle at 30% 20%, #07121f, #010101);
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px #0e2a3a, 0 0 0 5px #03121f;
+            width: 100%;
+            height: auto;
+            cursor: crosshair;
+        }
+
+        .radar-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 0.8rem;
+            font-family: monospace;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .badge {
+            background: #0f172a;
+            padding: 5px 12px;
+            border-radius: 40px;
+            border-left: 3px solid #2aff9e;
+        }
+
+        .report-section {
+            background: #0c1220;
+            border-radius: 24px;
+            padding: 20px;
+            border: 1px solid #233453;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid #2a3f60;
+            padding-bottom: 8px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid #1f2c44;
+        }
+
+        th {
+            background: #07101f;
+            color: #9effcf;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #101a2c;
+            cursor: pointer;
+        }
+
+        .selected-row {
+            background: #1a3a4e !important;
+            border-left: 3px solid #2aff9e;
+        }
+
+        .report-card {
+            background: #030812;
+            border-radius: 20px;
+            padding: 15px;
+            margin-top: 20px;
+            border: 1px solid #2a4a6a;
+            font-family: monospace;
+        }
+
+        .report-card h3 {
+            margin: 0 0 8px 0;
+            color: #6effb0;
+        }
+
+        .status-online {
+            color: #2aff9e;
+            font-weight: bold;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+
+        @media (max-width: 700px) {
+            body { padding: 12px; }
+            th, td { font-size: 0.7rem; padding: 6px 4px; }
+            .input-group label { font-size: 0.6rem; }
+            button, input { padding: 6px 10px; }
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;">
+        <div>
+            <h1>🔴 GROUND RADAR (ADS-B)</h1>
+            <div class="sub">Live tracking | Real aircraft & drones with transponders | No simulation</div>
+        </div>
+        <div class="badge" id="liveStatus">🟢 LIVE DATA (OpenSky)</div>
+    </div>
+
+    <!-- control panel -->
+    <div class="controls-panel">
+        <div class="input-group">
+            <label>📍 RADAR LATITUDE</label>
+            <input type="text" id="radarLat" value="40.7128" placeholder="40.7128">
+        </div>
+        <div class="input-group">
+            <label>📍 RADAR LONGITUDE</label>
+            <input type="text" id="radarLon" value="-74.0060" placeholder="-74.0060">
+        </div>
+        <div class="input-group">
+            <label>📡 MAX RANGE (km)</label>
+            <input type="number" id="maxRange" value="120" step="10" min="30" max="300">
+        </div>
+        <div class="input-group">
+            <label>⏱️ REFRESH (sec)</label>
+            <input type="number" id="refreshSec" value="6" step="1" min="3" max="15">
+        </div>
+        <button class="primary" id="updateRadarBtn">🔄 UPDATE RADAR</button>
+        <button id="locateMeBtn" style="background:#2a4359;">📍 MY LOCATION</button>
+    </div>
+
+    <!-- RADAR CANVAS -->
+    <div class="radar-container">
+        <canvas id="radarCanvas" width="700" height="700" style="width:100%; max-width:700px; height:auto; aspect-ratio:1/1"></canvas>
+        <div class="radar-stats">
+            <span>🎯 TARGETS: <strong id="targetCount">0</strong></span>
+            <span>🟢 MOVING | 🔴 STATIC (speed < 0.5 m/s)</span>
+            <span>📡 LAST UPDATE: <span id="lastUpdate">--</span></span>
+            <span>📐 RANGE: <span id="rangeKmDisplay">120</span> km</span>
+        </div>
+    </div>
+
+    <!-- AIRCRAFT TABLE + REPORT -->
+    <div class="report-section">
+        <div class="section-title">
+            🛸 DASHBOARD REPORT — DETECTED OBJECTS (real-time)
+            <span style="font-size:0.7rem;">click any row to view detailed report</span>
+        </div>
+        <div class="table-wrapper">
+            <table id="aircraftTable">
+                <thead>
+                    <tr><th>CALLSIGN / ID</th><th>LATITUDE</th><th>LONGITUDE</th><th>ALT (m)</th><th>SPEED (m/s)</th><th>STATUS</th><th>HEADING</th></tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="7">🔄 loading live radar data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="detailedReport" class="report-card">
+            <h3>📋 SPECIFIC OBJECT REPORT</h3>
+            <div id="reportContent">Select any flying object from the list above to generate detailed intelligence report.</div>
+        </div>
+    </div>
+    <footer>⚠️ Real ADS-B data via OpenSky Network. Coverage depends on ground stations. Drones with ADS-B transponders appear. Static = velocity < 0.5 m/s.</footer>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // REAL RADAR using OpenSky Network REST API (proxy via Node backend)
+    // but for complete standalone demonstration we must connect to a local backend
+    // that proxies the opensky API due to CORS. This frontend expects a local server
+    // running on same origin (or configured). Since this is a full code solution,
+    // we will also implement a lightweight node proxy in the same project.
+    // BUT for convenience and completeness, the frontend will call '/api/aircraft'
+    // which we will serve via a Node.js Express server (see server.js).
+    // --------------------------------------------------------------
+    let radarCtx = null;
+    let canvasSize = 700;
+    let currentAircraft = [];      // array of objects
+    let selectedIcao = null;
+    let refreshTimer = null;
+    let radarCenter = { lat: 40.7128, lon: -74.0060 };
+    let maxRangeKm = 120;
+    let refreshIntervalSec = 6;
+
+    // DOM elements
+    const radarCanvas = document.getElementById('radarCanvas');
+    const targetCountSpan = document.getElementById('targetCount');
+    const lastUpdateSpan = document.getElementById('lastUpdate');
+    const tableBody = document.getElementById('tableBody');
+    const reportDiv = document.getElementById('reportContent');
+    const rangeKmDisplay = document.getElementById('rangeKmDisplay');
+    const radarLatInput = document.getElementById('radarLat');
+    const radarLonInput = document.getElementById('radarLon');
+    const maxRangeInput = document.getElementById('maxRange');
+    const refreshSecInput = document.getElementById('refreshSec');
+    const updateRadarBtn = document.getElementById('updateRadarBtn');
+    const locateMeBtn = document.getElementById('locateMeBtn');
+
+    // Helper: haversine distance (km)
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    // bearing from radar to aircraft (degrees from north)
+    function calculateBearing(lat1, lon1, lat2, lon2) {
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δλ = (lon2 - lon1) * Math.PI/180;
+        const y = Math.sin(Δλ) * Math.cos(φ2);
+        const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+        let θ = Math.atan2(y, x);
+        let brng = (θ * 180/Math.PI + 360) % 360;
+        return brng;
+    }
+
+    // draw radar grid and blips
+    function drawRadar(aircraftList, radarLat, radarLon, maxRange) {
+        if (!radarCtx) return;
+        const w = canvasSize, h = canvasSize;
+        const centerX = w/2, centerY = h/2;
+        const maxRadiusPx = w/2 - 25;
+        
+        radarCtx.clearRect(0, 0, w, h);
+        // draw background
+        radarCtx.beginPath();
+        radarCtx.arc(centerX, centerY, maxRadiusPx, 0, 2*Math.PI);
+        radarCtx.fillStyle = '#010a14';
+        radarCtx.fill();
+        radarCtx.strokeStyle = '#2bffaa30';
+        radarCtx.lineWidth = 1.5;
+        radarCtx.stroke();
+
+        // range rings (25%, 50%, 75%, 100%)
+        for (let r = 0.25; r <= 1; r+=0.25) {
+            let radius = maxRadiusPx * r;
+            radarCtx.beginPath();
+            radarCtx.arc(centerX, centerY, radius, 0, 2*Math.PI);
+            radarCtx.strokeStyle = '#28e6a830';
+            radarCtx.setLineDash([4, 6]);
+            radarCtx.stroke();
+            // range label
+            let rangeVal = (maxRange * r).toFixed(0);
+            radarCtx.font = "10px monospace";
+            radarCtx.fillStyle = '#7f9fcf';
+            radarCtx.shadowBlur = 0;
+            radarCtx.fillText(rangeVal+"km", centerX + radius + 3, centerY - 3);
+        }
+        radarCtx.setLineDash([]);
+        // crosshair & north
+        radarCtx.beginPath();
+        radarCtx.moveTo(centerX, centerY-12);
+        radarCtx.lineTo(centerX, centerY+12);
+        radarCtx.moveTo(centerX-12, centerY);
+        radarCtx.lineTo(centerX+12, centerY);
+        radarCtx.strokeStyle = '#2aff9e';
+        radarCtx.lineWidth = 1.2;
+        radarCtx.stroke();
+        radarCtx.fillStyle = '#ffffff';
+        radarCtx.font = "bold 12px monospace";
+        radarCtx.fillText("N", centerX-6, centerY-maxRadiusPx+12);
+        
+        // draw each target
+        for (let ac of aircraftList) {
+            const dist = haversineDistance(radarLat, radarLon, ac.lat, ac.lon);
+            if (dist > maxRange) continue;
+            const bearing = calculateBearing(radarLat, radarLon, ac.lat, ac.lon);
+            const angleRad = bearing * Math.PI / 180;
+            const radiusPx = (dist / maxRange) * maxRadiusPx;
+            const x = centerX + radiusPx * Math.sin(angleRad);
+            const y = centerY - radiusPx * Math.cos(angleRad);
+            
+            // determine if moving: speed > 0.5 m/s
+            const isMoving = (ac.velocity !== undefined && ac.velocity > 0.5);
+            const color = isMoving ? '#2eff9e' : '#ff5555';
+            radarCtx.beginPath();
+            radarCtx.arc(x, y, 6, 0, 2*Math.PI);
+            radarCtx.fillStyle = color;
+            radarCtx.shadowBlur = 8;
+            radarCtx.shadowColor = isMoving ? '#2eff9e' : '#ff7777';
+            radarCtx.fill();
+            radarCtx.fillStyle = 'white';
+            radarCtx.font = "bold 10px monospace";
+            radarCtx.shadowBlur = 2;
+            let label = ac.callsign ? ac.callsign.trim() : (ac.icao24 ? ac.icao24.slice(-5) : "???");
+            if(label.length > 6) label = label.slice(0,6);
+            radarCtx.fillText(label, x+8, y-4);
+            // highlight selected aircraft
+            if (selectedIcao === ac.icao24) {
+                radarCtx.beginPath();
+                radarCtx.arc(x, y, 12, 0, 2*Math.PI);
+                radarCtx.strokeStyle = '#ffdd77';
+                radarCtx.lineWidth = 2.5;
+                radarCtx.stroke();
+            }
+        }
+        // draw radar sweep (optional)
+        const now = Date.now() / 1000;
+        const sweepAngle = (now * 1.2) % 360;
+        let radSweep = sweepAngle * Math.PI/180;
+        radarCtx.beginPath();
+        radarCtx.moveTo(centerX, centerY);
+        let sweepX = centerX + maxRadiusPx * Math.sin(radSweep);
+        let sweepY = centerY - maxRadiusPx * Math.cos(radSweep);
+        radarCtx.lineTo(sweepX, sweepY);
+        radarCtx.strokeStyle = '#9effcf66';
+        radarCtx.lineWidth = 2;
+        radarCtx.stroke();
+        radarCtx.beginPath();
+        radarCtx.arc(centerX, centerY, 4, 0, 2*Math.PI);
+        radarCtx.fillStyle = '#ffaa44';
+        radarCtx.fill();
+    }
+
+    // fetch live aircraft from backend proxy (real OpenSky data)
+    async function fetchLiveAircraft(radarLat, radarLon, radiusKm) {
+        try {
+            const response = await fetch(`/api/aircraft?lat=${radarLat}&lon=${radarLon}&radius=${radiusKm}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || "API error");
+            return data.aircraft || [];
+        } catch (err) {
+            console.error("Fetch error:", err);
+            return null;
+        }
+    }
+
+    // update table and UI with new data, refresh radar
+    async function refreshRadarData() {
+        const lat = parseFloat(radarLatInput.value);
+        const lon = parseFloat(radarLonInput.value);
+        const range = parseFloat(maxRangeInput.value);
+        if (isNaN(lat) || isNaN(lon) || isNaN(range)) return;
+        radarCenter = { lat, lon };
+        maxRangeKm = range;
+        rangeKmDisplay.innerText = maxRangeKm;
+        
+        const aircraftData = await fetchLiveAircraft(lat, lon, maxRangeKm);
+        if (!aircraftData) {
+            document.getElementById('liveStatus').innerHTML = "⚠️ API ERROR (check backend)";
+            return;
+        }
+        document.getElementById('liveStatus').innerHTML = "🟢 LIVE DATA (OpenSky)";
+        currentAircraft = aircraftData;
+        targetCountSpan.innerText = currentAircraft.length;
+        lastUpdateSpan.innerText = new Date().toLocaleTimeString();
+        
+        // render table
+        renderTable(currentAircraft);
+        // draw radar
+        if (radarCtx) drawRadar(currentAircraft, lat, lon, maxRangeKm);
+        // if a selected object exists, update its report
+        if (selectedIcao) {
+            const found = currentAircraft.find(ac => ac.icao24 === selectedIcao);
+            if (found) generateDetailedReport(found);
+            else {
+                reportDiv.innerHTML = "⚠️ Selected object no longer in radar coverage.";
+                selectedIcao = null;
+            }
+        }
+    }
+
+    function renderTable(aircraftList) {
+        if (!aircraftList.length) {
+            tableBody.innerHTML = '<tr><td colspan="7">✈️ No flying objects detected within radar range.</td></tr>';
+            return;
+        }
+        let html = '';
+        for (let ac of aircraftList) {
+            const isMoving = (ac.velocity !== null && ac.velocity > 0.5);
+            const statusLabel = isMoving ? '🟢 MOVING' : '🔴 STATIC';
+            const speedVal = (ac.velocity !== null) ? ac.velocity.toFixed(1) : '?';
+            const headingVal = (ac.heading !== null) ? ac.heading.toFixed(0)+'°' : '---';
+            const callsignDisplay = ac.callsign ? ac.callsign : (ac.icao24 ? ac.icao24.slice(0,8) : 'UNKNOWN');
+            const altVal = (ac.geoAltitude !== null) ? ac.geoAltitude.toFixed(0) : 'N/A';
+            const rowClass = (selectedIcao === ac.icao24) ? 'selected-row' : '';
+            html += `<tr class="${rowClass}" data-icao="${ac.icao24}">
+                        <td>${escapeHtml(callsignDisplay)}</td>
+                        <td>${ac.lat.toFixed(4)}</td>
+                        <td>${ac.lon.toFixed(4)}</td>
+                        <td>${altVal}</td>
+                        <td>${speedVal}</td>
+                        <td>${statusLabel}</td>
+                        <td>${headingVal}</td>
+                     </tr>`;
+        }
+        tableBody.innerHTML = html;
+        // attach click listeners
+        document.querySelectorAll('#aircraftTable tbody tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                const icao = row.getAttribute('data-icao');
+                const aircraft = currentAircraft.find(a => a.icao24 === icao);
+                if (aircraft) {
+                    selectedIcao = icao;
+                    generateDetailedReport(aircraft);
+                    refreshRadarData();  // re-draw to highlight selected
+                }
+            });
+        });
+    }
+
+    function generateDetailedReport(ac) {
+        const isMoving = (ac.velocity !== null && ac.velocity > 0.5);
+        let speedText = ac.velocity !== null ? `${ac.velocity.toFixed(2)} m/s (${(ac.velocity*3.6).toFixed(1)} km/h)` : 'unknown';
+        let altText = ac.geoAltitude !== null ? `${ac.geoAltitude.toFixed(1)} meters (${(ac.geoAltitude*3.28084).toFixed(0)} ft)` : 'not reported';
+        let headingText = ac.heading !== null ? `${ac.heading.toFixed(1)}° (true)` : 'unknown';
+        let verticalRate = ac.verticalRate !== null ? `${ac.verticalRate.toFixed(1)} m/s` : 'N/A';
+        let onGround = ac.onGround ? 'YES (on ground)' : 'AIRBORNE';
+        let callsignNice = ac.callsign ? ac.callsign : 'no callsign';
+        let icao = ac.icao24;
+        let lastSeen = new Date().toLocaleTimeString();
+        
+        reportDiv.innerHTML = `
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div><strong>✈️ OBJECT:</strong> ${escapeHtml(callsignNice)}</div>
+                <div><strong>🆔 ICAO24:</strong> ${icao}</div>
+                <div><strong>📍 LAT/LON:</strong> ${ac.lat.toFixed(5)} , ${ac.lon.toFixed(5)}</div>
+                <div><strong>📏 ALTITUDE:</strong> ${altText}</div>
+                <div><strong>💨 SPEED:</strong> ${speedText}</div>
+                <div><strong>🧭 HEADING:</strong> ${headingText}</div>
+                <div><strong>📈 VERTICAL RATE:</strong> ${verticalRate}</div>
+                <div><strong>⚡ STATUS:</strong> ${isMoving ? '🟢 MOVING' : '🔴 STATIC (low velocity)'}</div>
+                <div><strong>🛬 ON GROUND:</strong> ${onGround}</div>
+                <div><strong>🕒 LAST RADAR CONTACT:</strong> ${lastSeen}</div>
+                <div><strong>📡 RADAR RANGE:</strong> ${maxRangeKm} km from center</div>
+            </div>
+            <hr style="border-color:#2a4f6e; margin-top:12px;">
+            <div style="font-size:0.75rem;">🔍 Real ADS-B data via OpenSky Network. This report corresponds to real-world transponder emissions.</div>
+        `;
+    }
+
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+    function initRadarCanvas() {
+        const container = document.querySelector('.radar-container');
+        const size = Math.min(container.clientWidth - 40, 700);
+        radarCanvas.width = size;
+        radarCanvas.height = size;
+        canvasSize = size;
+        radarCtx = radarCanvas.getContext('2d');
+        radarCtx.shadowBlur = 0;
+        refreshRadarData();
+    }
+
+    function startAutoRefresh() {
+        if (refreshTimer) clearInterval(refreshTimer);
+        let sec = parseInt(refreshSecInput.value);
+        if (isNaN(sec)) sec = 6;
+        refreshIntervalSec = Math.min(15, Math.max(3, sec));
+        refreshTimer = setInterval(() => {
+            refreshRadarData();
+        }, refreshIntervalSec * 1000);
+    }
+
+    // get current location
+    function getMyLocation() {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                radarLatInput.value = pos.coords.latitude.toFixed(5);
+                radarLonInput.value = pos.coords.longitude.toFixed(5);
+                refreshRadarData();
+            }, err => {
+                alert("Location error: " + err.message);
+            });
+        } else {
+            alert("Geolocation not supported");
+        }
+    }
+
+    // event binding
+    updateRadarBtn.addEventListener('click', () => {
+        if (refreshTimer) clearInterval(refreshTimer);
+        startAutoRefresh();
+        refreshRadarData();
+    });
+    locateMeBtn.addEventListener('click', getMyLocation);
+    refreshSecInput.addEventListener('change', () => {
+        startAutoRefresh();
+    });
+    window.addEventListener('resize', () => {
+        setTimeout(() => {
+            if (radarCanvas) {
+                const container = document.querySelector('.radar-container');
+                let newSize = Math.min(container.clientWidth - 40, 700);
+                radarCanvas.width = newSize;
+                radarCanvas.height = newSize;
+                canvasSize = newSize;
+                if (currentAircraft) drawRadar(currentAircraft, radarCenter.lat, radarCenter.lon, maxRangeKm);
+            }
+        }, 100);
+    });
+
+    // initial
+    initRadarCanvas();
+    startAutoRefresh();
+</script>
+</body>
+</html>
