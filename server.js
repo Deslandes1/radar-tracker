@@ -2,10 +2,26 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 
-// Serve static files (index.html, etc.)
 app.use(express.static('.'));
 
-// Proxy endpoint for OpenSky Network
+// Helper to fetch with retry
+async function fetchOpenSky(retries = 2) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await axios.get('https://opensky-network.org/api/states/all', {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RadarApp/1.0)' },
+        timeout: 10000 // 10 seconds
+      });
+      return response.data;
+    } catch (err) {
+      console.error(`OpenSky attempt ${i+1} failed:`, err.message);
+      if (i === retries - 1) throw err;
+      // Wait 1 second before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+}
+
 app.get('/api/aircraft', async (req, res) => {
   const { lat, lon, radius } = req.query;
 
@@ -18,13 +34,8 @@ app.get('/api/aircraft', async (req, res) => {
   const radiusNum = parseFloat(radius);
 
   try {
-    // Add a User-Agent and timeout to avoid being blocked
-    const response = await axios.get('https://opensky-network.org/api/states/all', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RadarApp/1.0)' },
-      timeout: 10000 // 10 seconds
-    });
-
-    const allStates = response.data.states || [];
+    const data = await fetchOpenSky();
+    const allStates = data.states || [];
 
     const aircraftInRange = [];
     for (const state of allStates) {
@@ -41,7 +52,7 @@ app.get('/api/aircraft', async (req, res) => {
       if (latitude === null || longitude === null) continue;
 
       // Haversine distance
-      const R = 6371; // km
+      const R = 6371;
       const dLat = (latitude - latNum) * Math.PI / 180;
       const dLon = (longitude - lonNum) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 +
@@ -66,7 +77,7 @@ app.get('/api/aircraft', async (req, res) => {
       }
     }
 
-    // Remove duplicates by icao24 (just in case)
+    // Remove duplicates
     const unique = [];
     const seen = new Set();
     for (const ac of aircraftInRange) {
@@ -78,21 +89,17 @@ app.get('/api/aircraft', async (req, res) => {
 
     res.json({ success: true, aircraft: unique });
   } catch (error) {
-    // Detailed logging for debugging
-    console.error('OpenSky API error:', error.message);
+    console.error('OpenSky API error after retries:', error.message);
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', error.response.data);
     } else if (error.request) {
       console.error('No response received. Request details:', error.request);
-    } else {
-      console.error('Error setup:', error.message);
     }
     res.status(500).json({ success: false, error: 'Failed to fetch flight data' });
   }
 });
 
-// Use port from environment (Render) or 3000 locally
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Radar server running on port ${PORT}`);
