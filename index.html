@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,7 +7,7 @@
     <style>
         * {
             box-sizing: border-box;
-            user-select: none; /* avoid accidental selection on radar */
+            user-select: none;
         }
 
         body {
@@ -235,7 +235,6 @@
         <div class="badge" id="liveStatus">🟢 LIVE DATA (OpenSky)</div>
     </div>
 
-    <!-- control panel -->
     <div class="controls-panel">
         <div class="input-group">
             <label>📍 RADAR LATITUDE</label>
@@ -257,7 +256,6 @@
         <button id="locateMeBtn" style="background:#2a4359;">📍 MY LOCATION</button>
     </div>
 
-    <!-- RADAR CANVAS -->
     <div class="radar-container">
         <canvas id="radarCanvas" width="700" height="700" style="width:100%; max-width:700px; height:auto; aspect-ratio:1/1"></canvas>
         <div class="radar-stats">
@@ -268,7 +266,6 @@
         </div>
     </div>
 
-    <!-- AIRCRAFT TABLE + REPORT -->
     <div class="report-section">
         <div class="section-title">
             🛸 DASHBOARD REPORT — DETECTED OBJECTS (real-time)
@@ -294,22 +291,17 @@
 
 <script>
     // --------------------------------------------------------------
-    // REAL RADAR using OpenSky Network REST API (proxy via Node backend)
-    // but for complete standalone demonstration we must connect to a local backend
-    // that proxies the opensky API due to CORS. This frontend expects a local server
-    // running on same origin (or configured). Since this is a full code solution,
-    // we will also implement a lightweight node proxy in the same project.
-    // BUT for convenience and completeness, the frontend will call '/api/aircraft'
-    // which we will serve via a Node.js Express server (see server.js).
+    // GLOBAL VARIABLES
     // --------------------------------------------------------------
     let radarCtx = null;
     let canvasSize = 700;
-    let currentAircraft = [];      // array of objects
+    let currentAircraft = [];
     let selectedIcao = null;
     let refreshTimer = null;
     let radarCenter = { lat: 40.7128, lon: -74.0060 };
     let maxRangeKm = 120;
     let refreshIntervalSec = 6;
+    let animationFrameId = null;
 
     // DOM elements
     const radarCanvas = document.getElementById('radarCanvas');
@@ -347,15 +339,15 @@
         return brng;
     }
 
-    // draw radar grid and blips
-    function drawRadar(aircraftList, radarLat, radarLon, maxRange) {
+    // DRAW RADAR (accepts timestamp for sweep)
+    function drawRadar(aircraftList, radarLat, radarLon, maxRange, nowSeconds) {
         if (!radarCtx) return;
         const w = canvasSize, h = canvasSize;
         const centerX = w/2, centerY = h/2;
         const maxRadiusPx = w/2 - 25;
         
         radarCtx.clearRect(0, 0, w, h);
-        // draw background
+        // background circle
         radarCtx.beginPath();
         radarCtx.arc(centerX, centerY, maxRadiusPx, 0, 2*Math.PI);
         radarCtx.fillStyle = '#010a14';
@@ -364,7 +356,7 @@
         radarCtx.lineWidth = 1.5;
         radarCtx.stroke();
 
-        // range rings (25%, 50%, 75%, 100%)
+        // range rings
         for (let r = 0.25; r <= 1; r+=0.25) {
             let radius = maxRadiusPx * r;
             radarCtx.beginPath();
@@ -372,11 +364,9 @@
             radarCtx.strokeStyle = '#28e6a830';
             radarCtx.setLineDash([4, 6]);
             radarCtx.stroke();
-            // range label
             let rangeVal = (maxRange * r).toFixed(0);
             radarCtx.font = "10px monospace";
             radarCtx.fillStyle = '#7f9fcf';
-            radarCtx.shadowBlur = 0;
             radarCtx.fillText(rangeVal+"km", centerX + radius + 3, centerY - 3);
         }
         radarCtx.setLineDash([]);
@@ -403,8 +393,7 @@
             const x = centerX + radiusPx * Math.sin(angleRad);
             const y = centerY - radiusPx * Math.cos(angleRad);
             
-            // determine if moving: speed > 0.5 m/s
-            const isMoving = (ac.velocity !== undefined && ac.velocity > 0.5);
+            const isMoving = (ac.velocity !== null && ac.velocity > 0.5);
             const color = isMoving ? '#2eff9e' : '#ff5555';
             radarCtx.beginPath();
             radarCtx.arc(x, y, 6, 0, 2*Math.PI);
@@ -427,14 +416,13 @@
                 radarCtx.stroke();
             }
         }
-        // draw radar sweep (optional)
-        const now = Date.now() / 1000;
-        const sweepAngle = (now * 1.2) % 360;
-        let radSweep = sweepAngle * Math.PI/180;
+        // draw rotating sweep line
+        const sweepAngle = (nowSeconds * 1.2) % 360;
+        const radSweep = sweepAngle * Math.PI/180;
         radarCtx.beginPath();
         radarCtx.moveTo(centerX, centerY);
-        let sweepX = centerX + maxRadiusPx * Math.sin(radSweep);
-        let sweepY = centerY - maxRadiusPx * Math.cos(radSweep);
+        const sweepX = centerX + maxRadiusPx * Math.sin(radSweep);
+        const sweepY = centerY - maxRadiusPx * Math.cos(radSweep);
         radarCtx.lineTo(sweepX, sweepY);
         radarCtx.strokeStyle = '#9effcf66';
         radarCtx.lineWidth = 2;
@@ -445,7 +433,23 @@
         radarCtx.fill();
     }
 
-    // fetch live aircraft from backend proxy (real OpenSky data)
+    // Animation loop
+    function startAnimation() {
+        function animate() {
+            if (radarCtx) {
+                const now = Date.now() / 1000;
+                const lat = parseFloat(radarLatInput.value);
+                const lon = parseFloat(radarLonInput.value);
+                const range = parseFloat(maxRangeInput.value);
+                drawRadar(currentAircraft, lat, lon, range, now);
+            }
+            animationFrameId = requestAnimationFrame(animate);
+        }
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = requestAnimationFrame(animate);
+    }
+
+    // Fetch live aircraft from backend
     async function fetchLiveAircraft(radarLat, radarLon, radiusKm) {
         try {
             const response = await fetch(`/api/aircraft?lat=${radarLat}&lon=${radarLon}&radius=${radiusKm}`);
@@ -459,41 +463,7 @@
         }
     }
 
-    // update table and UI with new data, refresh radar
-    async function refreshRadarData() {
-        const lat = parseFloat(radarLatInput.value);
-        const lon = parseFloat(radarLonInput.value);
-        const range = parseFloat(maxRangeInput.value);
-        if (isNaN(lat) || isNaN(lon) || isNaN(range)) return;
-        radarCenter = { lat, lon };
-        maxRangeKm = range;
-        rangeKmDisplay.innerText = maxRangeKm;
-        
-        const aircraftData = await fetchLiveAircraft(lat, lon, maxRangeKm);
-        if (!aircraftData) {
-            document.getElementById('liveStatus').innerHTML = "⚠️ API ERROR (check backend)";
-            return;
-        }
-        document.getElementById('liveStatus').innerHTML = "🟢 LIVE DATA (OpenSky)";
-        currentAircraft = aircraftData;
-        targetCountSpan.innerText = currentAircraft.length;
-        lastUpdateSpan.innerText = new Date().toLocaleTimeString();
-        
-        // render table
-        renderTable(currentAircraft);
-        // draw radar
-        if (radarCtx) drawRadar(currentAircraft, lat, lon, maxRangeKm);
-        // if a selected object exists, update its report
-        if (selectedIcao) {
-            const found = currentAircraft.find(ac => ac.icao24 === selectedIcao);
-            if (found) generateDetailedReport(found);
-            else {
-                reportDiv.innerHTML = "⚠️ Selected object no longer in radar coverage.";
-                selectedIcao = null;
-            }
-        }
-    }
-
+    // Render table and update UI
     function renderTable(aircraftList) {
         if (!aircraftList.length) {
             tableBody.innerHTML = '<tr><td colspan="7">✈️ No flying objects detected within radar range.</td></tr>';
@@ -527,7 +497,6 @@
                 if (aircraft) {
                     selectedIcao = icao;
                     generateDetailedReport(aircraft);
-                    refreshRadarData();  // re-draw to highlight selected
                 }
             });
         });
@@ -576,6 +545,36 @@
         refreshRadarData();
     }
 
+    async function refreshRadarData() {
+        const lat = parseFloat(radarLatInput.value);
+        const lon = parseFloat(radarLonInput.value);
+        const range = parseFloat(maxRangeInput.value);
+        if (isNaN(lat) || isNaN(lon) || isNaN(range)) return;
+        radarCenter = { lat, lon };
+        maxRangeKm = range;
+        rangeKmDisplay.innerText = maxRangeKm;
+        
+        const aircraftData = await fetchLiveAircraft(lat, lon, maxRangeKm);
+        if (!aircraftData) {
+            document.getElementById('liveStatus').innerHTML = "⚠️ API ERROR (check backend)";
+            return;
+        }
+        document.getElementById('liveStatus').innerHTML = "🟢 LIVE DATA (OpenSky)";
+        currentAircraft = aircraftData;
+        targetCountSpan.innerText = currentAircraft.length;
+        lastUpdateSpan.innerText = new Date().toLocaleTimeString();
+        
+        renderTable(currentAircraft);
+        if (selectedIcao) {
+            const found = currentAircraft.find(ac => ac.icao24 === selectedIcao);
+            if (found) generateDetailedReport(found);
+            else {
+                reportDiv.innerHTML = "⚠️ Selected object no longer in radar coverage.";
+                selectedIcao = null;
+            }
+        }
+    }
+
     function startAutoRefresh() {
         if (refreshTimer) clearInterval(refreshTimer);
         let sec = parseInt(refreshSecInput.value);
@@ -586,7 +585,6 @@
         }, refreshIntervalSec * 1000);
     }
 
-    // get current location
     function getMyLocation() {
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(pos => {
@@ -601,7 +599,7 @@
         }
     }
 
-    // event binding
+    // Event listeners
     updateRadarBtn.addEventListener('click', () => {
         if (refreshTimer) clearInterval(refreshTimer);
         startAutoRefresh();
@@ -619,14 +617,15 @@
                 radarCanvas.width = newSize;
                 radarCanvas.height = newSize;
                 canvasSize = newSize;
-                if (currentAircraft) drawRadar(currentAircraft, radarCenter.lat, radarCenter.lon, maxRangeKm);
+                // draw will happen on next animation frame
             }
         }, 100);
     });
 
-    // initial
+    // Initialization
     initRadarCanvas();
     startAutoRefresh();
+    startAnimation();
 </script>
 </body>
 </html>
