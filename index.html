@@ -3,98 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>REAL RADAR - Secure Access</title>
+    <title>REAL RADAR - Live Airborne Object Tracker | ADS-B based</title>
     <style>
         * {
             box-sizing: border-box;
+            user-select: none;
         }
 
         body {
             background: #0a0f1e;
-            font-family: 'Segoe UI', 'Roboto', monospace;
+            font-family: 'Segoe UI', 'Roboto', 'Orbitron', monospace;
             margin: 0;
             padding: 20px;
             color: #ccd6f6;
         }
 
-        /* Login Overlay */
-        #loginOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 15, 30, 0.98);
-            backdrop-filter: blur(12px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: 0.3s;
-        }
-
-        .login-card {
-            background: #11161f;
-            border-radius: 32px;
-            padding: 40px;
-            width: 90%;
-            max-width: 400px;
-            border: 1px solid #2aff9e;
-            box-shadow: 0 0 30px rgba(42, 255, 158, 0.2);
-            text-align: center;
-        }
-
-        .login-card h2 {
-            margin-bottom: 20px;
-            color: #2aff9e;
-        }
-
-        .login-card input {
-            width: 100%;
-            padding: 12px;
-            margin: 15px 0;
-            background: #0b1018;
-            border: 1px solid #2c3f5f;
-            border-radius: 40px;
-            color: white;
-            font-size: 1rem;
-            text-align: center;
-        }
-
-        .login-card button {
-            background: #0f7b3e;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 40px;
-            color: white;
-            font-weight: bold;
-            width: 100%;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .login-card button:hover {
-            background: #19a854;
-        }
-
-        .error-msg {
-            color: #ff7777;
-            margin-top: 10px;
-            font-size: 0.9rem;
-        }
-
-        .contact-info {
-            margin-top: 20px;
-            font-size: 0.8rem;
-            color: #8e9aaf;
-        }
-
-        /* Radar Dashboard – initially hidden */
-        #radarApp {
-            display: none;
-        }
-
-        /* All existing radar styles (unchanged) */
         .dashboard {
             max-width: 1400px;
             margin: 0 auto;
@@ -291,6 +214,11 @@
             color: #6effb0;
         }
 
+        .status-online {
+            color: #2aff9e;
+            font-weight: bold;
+        }
+
         footer {
             text-align: center;
             margin-top: 25px;
@@ -308,134 +236,73 @@
     </style>
 </head>
 <body>
+<div class="dashboard">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;">
+        <div>
+            <h1>🔴 GROUND RADAR (ADS-B)</h1>
+            <div class="sub">Live tracking | Real aircraft & drones with transponders | No simulation</div>
+            <div class="owner">🇭🇹 Owner: Gesner Deslandes</div>
+        </div>
+        <div class="badge" id="liveStatus">🟢 LIVE DATA (OpenSky)</div>
+    </div>
 
-<!-- Login Overlay -->
-<div id="loginOverlay">
-    <div class="login-card">
-        <h2>🔒 RADAR ACCESS</h2>
-        <p>Enter password to view live tracking</p>
-        <input type="password" id="passwordInput" placeholder="Password">
-        <button id="loginBtn">UNLOCK RADAR</button>
-        <div id="loginError" class="error-msg"></div>
-        <div class="contact-info">
-            🔑 Contact the owner for the current password.<br>
-            📧 gesner.deslandes@example.com (change this)
+    <div class="controls-panel">
+        <div class="input-group">
+            <label>📍 RADAR LATITUDE</label>
+            <input type="text" id="radarLat" value="40.7128" placeholder="40.7128">
+        </div>
+        <div class="input-group">
+            <label>📍 RADAR LONGITUDE</label>
+            <input type="text" id="radarLon" value="-74.0060" placeholder="-74.0060">
+        </div>
+        <div class="input-group">
+            <label>📡 MAX RANGE (km)</label>
+            <input type="number" id="maxRange" value="120" step="10" min="30" max="300">
+        </div>
+        <div class="input-group">
+            <label>⏱️ REFRESH (sec)</label>
+            <input type="number" id="refreshSec" value="10" step="1" min="3" max="60">
+        </div>
+        <button class="primary" id="updateRadarBtn">🔄 UPDATE RADAR</button>
+        <button id="locateMeBtn" style="background:#2a4359;">📍 MY LOCATION</button>
+    </div>
+
+    <div class="radar-container">
+        <canvas id="radarCanvas" width="700" height="700" style="width:100%; max-width:700px; height:auto; aspect-ratio:1/1"></canvas>
+        <div class="radar-stats">
+            <span>🎯 TARGETS: <strong id="targetCount">0</strong></span>
+            <span>🟢 MOVING | 🔴 STATIC (speed < 0.5 m/s)</span>
+            <span>📡 LAST UPDATE: <span id="lastUpdate">--</span></span>
+            <span>📐 RANGE: <span id="rangeKmDisplay">120</span> km</span>
         </div>
     </div>
-</div>
 
-<!-- Main Radar App (hidden until login) -->
-<div id="radarApp">
-    <div class="dashboard">
-        <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;">
-            <div>
-                <h1>🔴 GROUND RADAR (ADS-B)</h1>
-                <div class="sub">Live tracking | Real aircraft & drones with transponders | No simulation</div>
-                <div class="owner">🇭🇹 Owner: Gesner Deslandes</div>
-            </div>
-            <div class="badge" id="liveStatus">🟢 LIVE DATA (OpenSky)</div>
+    <div class="report-section">
+        <div class="section-title">
+            🛸 DASHBOARD REPORT — DETECTED OBJECTS (real-time)
+            <span style="font-size:0.7rem;">click any row to view detailed report</span>
         </div>
-
-        <div class="controls-panel">
-            <div class="input-group">
-                <label>📍 RADAR LATITUDE</label>
-                <input type="text" id="radarLat" value="40.7128" placeholder="40.7128">
-            </div>
-            <div class="input-group">
-                <label>📍 RADAR LONGITUDE</label>
-                <input type="text" id="radarLon" value="-74.0060" placeholder="-74.0060">
-            </div>
-            <div class="input-group">
-                <label>📡 MAX RANGE (km)</label>
-                <input type="number" id="maxRange" value="120" step="10" min="30" max="300">
-            </div>
-            <div class="input-group">
-                <label>⏱️ REFRESH (sec)</label>
-                <!-- Updated default to 10, min=3, max=60 -->
-                <input type="number" id="refreshSec" value="10" step="1" min="3" max="60">
-            </div>
-            <button class="primary" id="updateRadarBtn">🔄 UPDATE RADAR</button>
-            <button id="locateMeBtn" style="background:#2a4359;">📍 MY LOCATION</button>
+        <div class="table-wrapper">
+            <table id="aircraftTable">
+                <thead>
+                    <tr><th>CALLSIGN / ID</th><th>LATITUDE</th><th>LONGITUDE</th><th>ALT (m)</th><th>SPEED (m/s)</th><th>STATUS</th><th>HEADING</th></tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="7">🔄 loading live radar data...</td></tr>
+                </tbody>
+            </table>
         </div>
-
-        <div class="radar-container">
-            <canvas id="radarCanvas" width="700" height="700" style="width:100%; max-width:700px; height:auto; aspect-ratio:1/1"></canvas>
-            <div class="radar-stats">
-                <span>🎯 TARGETS: <strong id="targetCount">0</strong></span>
-                <span>🟢 MOVING | 🔴 STATIC (speed < 0.5 m/s)</span>
-                <span>📡 LAST UPDATE: <span id="lastUpdate">--</span></span>
-                <span>📐 RANGE: <span id="rangeKmDisplay">120</span> km</span>
-            </div>
+        <div id="detailedReport" class="report-card">
+            <h3>📋 SPECIFIC OBJECT REPORT</h3>
+            <div id="reportContent">Select any flying object from the list above to generate detailed intelligence report.</div>
         </div>
-
-        <div class="report-section">
-            <div class="section-title">
-                🛸 DASHBOARD REPORT — DETECTED OBJECTS (real-time)
-                <span style="font-size:0.7rem;">click any row to view detailed report</span>
-            </div>
-            <div class="table-wrapper">
-                <table id="aircraftTable">
-                    <thead>
-                        <tr><th>CALLSIGN / ID</th><th>LATITUDE</th><th>LONGITUDE</th><th>ALT (m)</th><th>SPEED (m/s)</th><th>STATUS</th><th>HEADING</th>觼
-                    </thead>
-                    <tbody id="tableBody">
-                        <tr><td colspan="7">🔄 loading live radar data...蜒</td>
-                    </tbody>
-                划
-            </div>
-            <div id="detailedReport" class="report-card">
-                <h3>📋 SPECIFIC OBJECT REPORT</h3>
-                <div id="reportContent">Select any flying object from the list above to generate detailed intelligence report.</div>
-            </div>
-        </div>
-        <footer>⚠️ Real ADS-B data via OpenSky Network. Coverage depends on ground stations. Drones with ADS-B transponders appear. Static = velocity < 0.5 m/s.</footer>
     </div>
+    <footer>⚠️ Real ADS-B data via OpenSky Network. Coverage depends on ground stations. Drones with ADS-B transponders appear. Static = velocity < 0.5 m/s.</footer>
 </div>
 
-<script src="config.js"></script>
 <script>
     // --------------------------------------------------------------
-    // LOGIN HANDLING
-    // --------------------------------------------------------------
-    const loginOverlay = document.getElementById('loginOverlay');
-    const radarApp = document.getElementById('radarApp');
-    const passwordInput = document.getElementById('passwordInput');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginError = document.getElementById('loginError');
-
-    function checkLogin() {
-        if (sessionStorage.getItem('radar_auth') === 'true') {
-            loginOverlay.style.display = 'none';
-            radarApp.style.display = 'block';
-            initRadarApp();
-            return true;
-        }
-        return false;
-    }
-
-    function attemptLogin() {
-        const entered = passwordInput.value;
-        if (entered === RADAR_PASSWORD) {
-            sessionStorage.setItem('radar_auth', 'true');
-            loginOverlay.style.display = 'none';
-            radarApp.style.display = 'block';
-            initRadarApp();
-        } else {
-            loginError.textContent = '❌ Incorrect password. Contact owner for access.';
-            passwordInput.value = '';
-            passwordInput.focus();
-        }
-    }
-
-    loginBtn.addEventListener('click', attemptLogin);
-    passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptLogin();
-    });
-
-    if (checkLogin()) {}
-
-    // --------------------------------------------------------------
-    // RADAR CODE (with updated refresh limit)
+    // GLOBAL VARIABLES
     // --------------------------------------------------------------
     let radarCtx = null;
     let canvasSize = 700;
@@ -444,9 +311,10 @@
     let refreshTimer = null;
     let radarCenter = { lat: 40.7128, lon: -74.0060 };
     let maxRangeKm = 120;
-    let refreshIntervalSec = 10;   // default matches new input value
+    let refreshIntervalSec = 10;
     let animationFrameId = null;
 
+    // DOM elements
     const radarCanvas = document.getElementById('radarCanvas');
     const targetCountSpan = document.getElementById('targetCount');
     const lastUpdateSpan = document.getElementById('lastUpdate');
@@ -460,6 +328,7 @@
     const updateRadarBtn = document.getElementById('updateRadarBtn');
     const locateMeBtn = document.getElementById('locateMeBtn');
 
+    // Helper: haversine distance (km)
     function haversineDistance(lat1, lon1, lat2, lon2) {
         const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -469,6 +338,7 @@
         return R * c;
     }
 
+    // bearing from radar to aircraft (degrees from north)
     function calculateBearing(lat1, lon1, lat2, lon2) {
         const φ1 = lat1 * Math.PI/180;
         const φ2 = lat2 * Math.PI/180;
@@ -480,6 +350,7 @@
         return brng;
     }
 
+    // DRAW RADAR (accepts timestamp for sweep)
     function drawRadar(aircraftList, radarLat, radarLon, maxRange, nowSeconds) {
         if (!radarCtx) return;
         const w = canvasSize, h = canvasSize;
@@ -487,6 +358,7 @@
         const maxRadiusPx = w/2 - 25;
         
         radarCtx.clearRect(0, 0, w, h);
+        // background circle
         radarCtx.beginPath();
         radarCtx.arc(centerX, centerY, maxRadiusPx, 0, 2*Math.PI);
         radarCtx.fillStyle = '#010a14';
@@ -495,6 +367,7 @@
         radarCtx.lineWidth = 1.5;
         radarCtx.stroke();
 
+        // range rings
         for (let r = 0.25; r <= 1; r+=0.25) {
             let radius = maxRadiusPx * r;
             radarCtx.beginPath();
@@ -508,6 +381,7 @@
             radarCtx.fillText(rangeVal+"km", centerX + radius + 3, centerY - 3);
         }
         radarCtx.setLineDash([]);
+        // crosshair & north
         radarCtx.beginPath();
         radarCtx.moveTo(centerX, centerY-12);
         radarCtx.lineTo(centerX, centerY+12);
@@ -520,6 +394,7 @@
         radarCtx.font = "bold 12px monospace";
         radarCtx.fillText("N", centerX-6, centerY-maxRadiusPx+12);
         
+        // draw each target
         for (let ac of aircraftList) {
             const dist = haversineDistance(radarLat, radarLon, ac.lat, ac.lon);
             if (dist > maxRange) continue;
@@ -543,6 +418,7 @@
             let label = ac.callsign ? ac.callsign.trim() : (ac.icao24 ? ac.icao24.slice(-5) : "???");
             if(label.length > 6) label = label.slice(0,6);
             radarCtx.fillText(label, x+8, y-4);
+            // highlight selected aircraft
             if (selectedIcao === ac.icao24) {
                 radarCtx.beginPath();
                 radarCtx.arc(x, y, 12, 0, 2*Math.PI);
@@ -551,6 +427,7 @@
                 radarCtx.stroke();
             }
         }
+        // draw rotating sweep line
         const sweepAngle = (nowSeconds * 1.2) % 360;
         const radSweep = sweepAngle * Math.PI/180;
         radarCtx.beginPath();
@@ -567,6 +444,7 @@
         radarCtx.fill();
     }
 
+    // Animation loop
     function startAnimation() {
         function animate() {
             if (radarCtx) {
@@ -582,6 +460,7 @@
         animationFrameId = requestAnimationFrame(animate);
     }
 
+    // Fetch live aircraft from backend
     async function fetchLiveAircraft(radarLat, radarLon, radiusKm) {
         try {
             const response = await fetch(`/api/aircraft?lat=${radarLat}&lon=${radarLon}&radius=${radiusKm}`);
@@ -595,9 +474,10 @@
         }
     }
 
+    // Render table and update UI
     function renderTable(aircraftList) {
         if (!aircraftList.length) {
-            tableBody.innerHTML = '车脉<td colspan="7">✈️ No flying objects detected within radar range.脉</td>';
+            tableBody.innerHTML = '<tr><td colspan="7">✈️ No flying objects detected within radar range.</td></tr>';
             return;
         }
         let html = '';
@@ -610,16 +490,17 @@
             const altVal = (ac.geoAltitude !== null) ? ac.geoAltitude.toFixed(0) : 'N/A';
             const rowClass = (selectedIcao === ac.icao24) ? 'selected-row' : '';
             html += `<tr class="${rowClass}" data-icao="${ac.icao24}">
-                         <td>${escapeHtml(callsignDisplay)}</td>
-                         <td>${ac.lat.toFixed(4)}</td>
-                         <td>${ac.lon.toFixed(4)}</td>
-                         <td>${altVal}</td>
-                         <td>${speedVal}</td>
-                         <td>${statusLabel}</td>
-                         <td>${headingVal}</td>
-                      </tr>`;
+                        <td>${escapeHtml(callsignDisplay)}</td>
+                        <td>${ac.lat.toFixed(4)}</td>
+                        <td>${ac.lon.toFixed(4)}</td>
+                        <td>${altVal}</td>
+                        <td>${speedVal}</td>
+                        <td>${statusLabel}</td>
+                        <td>${headingVal}</td>
+                     </tr>`;
         }
         tableBody.innerHTML = html;
+        // attach click listeners
         document.querySelectorAll('#aircraftTable tbody tr').forEach(row => {
             row.addEventListener('click', (e) => {
                 const icao = row.getAttribute('data-icao');
@@ -730,32 +611,32 @@
         }
     }
 
-    function initRadarApp() {
-        initRadarCanvas();
+    // Event listeners
+    updateRadarBtn.addEventListener('click', () => {
+        if (refreshTimer) clearInterval(refreshTimer);
         startAutoRefresh();
-        startAnimation();
+        refreshRadarData();
+    });
+    locateMeBtn.addEventListener('click', getMyLocation);
+    refreshSecInput.addEventListener('change', () => {
+        startAutoRefresh();
+    });
+    window.addEventListener('resize', () => {
+        setTimeout(() => {
+            if (radarCanvas) {
+                const container = document.querySelector('.radar-container');
+                let newSize = Math.min(container.clientWidth - 40, 700);
+                radarCanvas.width = newSize;
+                radarCanvas.height = newSize;
+                canvasSize = newSize;
+            }
+        }, 100);
+    });
 
-        updateRadarBtn.addEventListener('click', () => {
-            if (refreshTimer) clearInterval(refreshTimer);
-            startAutoRefresh();
-            refreshRadarData();
-        });
-        locateMeBtn.addEventListener('click', getMyLocation);
-        refreshSecInput.addEventListener('change', () => {
-            startAutoRefresh();
-        });
-        window.addEventListener('resize', () => {
-            setTimeout(() => {
-                if (radarCanvas) {
-                    const container = document.querySelector('.radar-container');
-                    let newSize = Math.min(container.clientWidth - 40, 700);
-                    radarCanvas.width = newSize;
-                    radarCanvas.height = newSize;
-                    canvasSize = newSize;
-                }
-            }, 100);
-        });
-    }
+    // Initialization
+    initRadarCanvas();
+    startAutoRefresh();
+    startAnimation();
 </script>
 </body>
 </html>
