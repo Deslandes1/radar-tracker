@@ -42,6 +42,15 @@
             padding-left: 12px;
         }
 
+        .owner {
+            font-size: 0.8rem;
+            margin-top: 5px;
+            color: #9effcf;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .controls-panel {
             background: #11161fcc;
             backdrop-filter: blur(8px);
@@ -222,6 +231,7 @@
             th, td { font-size: 0.7rem; padding: 6px 4px; }
             .input-group label { font-size: 0.6rem; }
             button, input { padding: 6px 10px; }
+            .owner { font-size: 0.7rem; }
         }
     </style>
 </head>
@@ -231,6 +241,7 @@
         <div>
             <h1>🔴 GROUND RADAR (ADS-B)</h1>
             <div class="sub">Live tracking | Real aircraft & drones with transponders | No simulation</div>
+            <div class="owner">🇭🇹 Owner: Gesner Deslandes</div>
         </div>
         <div class="badge" id="liveStatus">🟢 LIVE DATA (OpenSky)</div>
     </div>
@@ -479,14 +490,14 @@
             const altVal = (ac.geoAltitude !== null) ? ac.geoAltitude.toFixed(0) : 'N/A';
             const rowClass = (selectedIcao === ac.icao24) ? 'selected-row' : '';
             html += `<tr class="${rowClass}" data-icao="${ac.icao24}">
-                        <td>${escapeHtml(callsignDisplay)}</td>
-                        <td>${ac.lat.toFixed(4)}</td>
-                        <td>${ac.lon.toFixed(4)}</td>
-                        <td>${altVal}</td>
-                        <td>${speedVal}</td>
-                        <td>${statusLabel}</td>
-                        <td>${headingVal}</td>
-                     </tr>`;
+                         <td>${escapeHtml(callsignDisplay)}</td>
+                         <td>${ac.lat.toFixed(4)}</td>
+                         <td>${ac.lon.toFixed(4)}</td>
+                         <td>${altVal}</td>
+                         <td>${speedVal}</td>
+                         <td>${statusLabel}</td>
+                         <td>${headingVal}</td>
+                      </tr>`;
         }
         tableBody.innerHTML = html;
         // attach click listeners
