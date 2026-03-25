@@ -18,7 +18,12 @@ app.get('/api/aircraft', async (req, res) => {
   const radiusNum = parseFloat(radius);
 
   try {
-    const response = await axios.get('https://opensky-network.org/api/states/all');
+    // Add a User-Agent and timeout to avoid being blocked
+    const response = await axios.get('https://opensky-network.org/api/states/all', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RadarApp/1.0)' },
+      timeout: 10000 // 10 seconds
+    });
+
     const allStates = response.data.states || [];
 
     const aircraftInRange = [];
@@ -36,7 +41,7 @@ app.get('/api/aircraft', async (req, res) => {
       if (latitude === null || longitude === null) continue;
 
       // Haversine distance
-      const R = 6371;
+      const R = 6371; // km
       const dLat = (latitude - latNum) * Math.PI / 180;
       const dLon = (longitude - lonNum) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 +
@@ -61,7 +66,7 @@ app.get('/api/aircraft', async (req, res) => {
       }
     }
 
-    // Remove duplicates
+    // Remove duplicates by icao24 (just in case)
     const unique = [];
     const seen = new Set();
     for (const ac of aircraftInRange) {
@@ -73,12 +78,21 @@ app.get('/api/aircraft', async (req, res) => {
 
     res.json({ success: true, aircraft: unique });
   } catch (error) {
+    // Detailed logging for debugging
     console.error('OpenSky API error:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received. Request details:', error.request);
+    } else {
+      console.error('Error setup:', error.message);
+    }
     res.status(500).json({ success: false, error: 'Failed to fetch flight data' });
   }
 });
 
-// Use the port provided by Render, or 3000 locally
+// Use port from environment (Render) or 3000 locally
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Radar server running on port ${PORT}`);
